@@ -124,6 +124,25 @@ label.btn{position:relative;cursor:pointer}
 .sheet .dock .row{display:flex}
 .sheet .dock .row .primary{flex:1}
 
+.photo-meta{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;color:var(--muted);margin-top:-8px}
+.scanner{position:fixed;inset:0;background:#0e1014;color:#fff;z-index:25;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.scan-top{display:flex;align-items:center;gap:12px;padding:12px 16px;font-size:14px;color:#c9cfdb}
+.scan-top .ghost{color:#fff;border-color:#3a4150}
+.scan-stage{position:relative;flex:1;min-height:0;margin:0 16px;touch-action:none;overflow:hidden}
+.scan-stage canvas{position:absolute}
+.scan-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.scan-svg polygon{fill:rgba(142,162,255,.14);stroke:#8ea2ff;stroke-width:2}
+.handle{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;touch-action:none;cursor:grab;display:grid;place-items:center}
+.handle::after{content:"";width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid #2340b8;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.handle.on::after{width:26px;height:26px;background:#8ea2ff}
+.scan-bottom{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.scan-bottom .row{display:grid;grid-template-columns:auto 1fr;gap:8px}
+.scan-bottom .btn.second{background:#1c2029;color:#fff;border-color:#3a4150}
+.scan-bottom .btn.primary{background:#2340b8;color:#fff}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:#1c2029;border-radius:10px;padding:3px}
+.seg button{background:none;border:0;color:#c9cfdb;padding:8px;border-radius:8px;font-size:14px;font-weight:600}
+.seg button[aria-pressed="true"]{background:#fff;color:#0e1014}
 .viewer{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:center;justify-content:center}
 .viewer img{max-width:100%;max-height:100%;object-fit:contain}
 .viewer button{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));background:#fff;color:#000;border:0;border-radius:99px;padding:8px 14px;font-weight:600}
@@ -203,6 +222,10 @@ label.btn{position:relative;cursor:pointer}
       <button class="ghost" id="closeBtn">Fermer</button>
     </div>
     <div class="photo" id="photoBox"></div>
+    <div class="photo-meta" id="photoMeta" hidden>
+      <span id="photoSize"></span>
+      <button class="ghost" id="recropBtn" type="button" hidden>Recadrer</button>
+    </div>
     <div class="notices" id="notice"></div>
     <form class="ticket" id="form" autocomplete="off" novalidate>
       <div class="field">
@@ -284,6 +307,32 @@ label.btn{position:relative;cursor:pointer}
       </div>
       <span class="hint" id="bHint"></span>
     </section>
+  </div>
+</div>
+
+<!-- Scanner -->
+<div class="scanner" id="scanner" hidden>
+  <div class="scan-top">
+    <button class="ghost" id="scanCancel" type="button">Annuler</button>
+    <span>Ajuste les 4 coins sur le ticket</span>
+  </div>
+  <div class="scan-stage" id="scanStage">
+    <canvas id="scanCanvas"></canvas>
+    <svg id="scanSvg" class="scan-svg" aria-hidden="true"><polygon id="scanPoly"/></svg>
+    <div class="handle" aria-label="Coin haut gauche"></div>
+    <div class="handle" aria-label="Coin haut droit"></div>
+    <div class="handle" aria-label="Coin bas droit"></div>
+    <div class="handle" aria-label="Coin bas gauche"></div>
+  </div>
+  <div class="scan-bottom">
+    <div class="seg" role="group" aria-label="Rendu">
+      <button type="button" data-scanmode="doc" aria-pressed="true">Document N&amp;B</button>
+      <button type="button" data-scanmode="color" aria-pressed="false">Couleur</button>
+    </div>
+    <div class="row">
+      <button class="btn second" id="scanAll" type="button">Photo entière</button>
+      <button class="btn primary" id="scanOk" type="button">Valider</button>
+    </div>
   </div>
 </div>
 
@@ -438,6 +487,10 @@ function renderPhoto(){
   b.innerHTML=photoUrl?`<img src="${photoUrl}" alt="Photo du reçu" id="photoImg">`+(reading?'<div class="reading"><div class="scan"></div><div>Lecture du reçu…<br><br><button class="ghost" type="button" id="cancelRead">Annuler</button></div></div>':''):'Pas de photo pour ce reçu.';
   const img=$('photoImg');if(img)img.onclick=()=>{$('viewerImg').src=photoUrl;$('viewer').hidden=false};
   const c=$('cancelRead');if(c)c.onclick=()=>reading&&reading.abort();
+  const m=$('photoMeta');
+  m.hidden=!photoBlob;
+  $('photoSize').textContent=photoBlob?`Photo · ${Math.max(1,Math.round(photoBlob.size/1024))} Ko`:'';
+  $('recropBtn').hidden=!(scan.src&&!reading);
 }
 $('viewerClose').onclick=()=>{$('viewer').hidden=true};
 
@@ -459,9 +512,10 @@ function fillForm(){
 }
 function closeEditor(){
   if(reading)reading.abort();
-  $('sheet').hidden=true;$('homeDock').hidden=false;draft=null;photoBlob=null;
+  $('sheet').hidden=true;$('homeDock').hidden=false;draft=null;photoBlob=null;scan.src=null;
   if(photoUrl){URL.revokeObjectURL(photoUrl);photoUrl=null}
 }
+$('recropBtn').onclick=()=>{if(scan.src)openScanner()};
 $('closeBtn').onclick=closeEditor;
 [['fEmetteur','emetteur'],['fTva','tvaIntra'],['fDate','date'],['fObjet','objet'],['fCat','categorie']].forEach(([id,k])=>$(id).addEventListener('input',()=>{draft[k]=$(id).value;if(id==='fTva')tvaHint()}));
 
@@ -475,13 +529,130 @@ async function downscale(file,max,q){
   c.getContext('2d').drawImage(src,0,0,c.width,c.height);
   return await new Promise(res=>c.toBlob(res,'image/jpeg',q));
 }
+/* ---------- Scanner : détection du ticket, recadrage 4 coins, redressement, filtre document ---------- */
+const scan={src:null,pts:null,mode:LS.get('recus.scanMode','doc'),drag:-1};
+async function loadWorking(file){
+  let bmp;
+  try{bmp=await createImageBitmap(file,{imageOrientation:'from-image'})}
+  catch(_){bmp=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)})}
+  const s=Math.min(1,2400/Math.max(bmp.width,bmp.height));
+  const c=document.createElement('canvas');c.width=Math.round(bmp.width*s);c.height=Math.round(bmp.height*s);
+  c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);
+  return c;
+}
+// Ticket clair sur fond plus sombre : seuil d'Otsu, plus grande zone claire, coins extrêmes.
+function detectQuad(src){
+  const S=360/Math.max(src.width,src.height),w=Math.max(8,Math.round(src.width*S)),h=Math.max(8,Math.round(src.height*S));
+  const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(src,0,0,w,h);
+  const d=x.getImageData(0,0,w,h).data,n=w*h,g=new Uint8Array(n),hist=new Uint32Array(256);
+  for(let i=0;i<n;i++){const v=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;g[i]=v;hist[v]++}
+  let sum=0;for(let i=0;i<256;i++)sum+=i*hist[i];
+  let sB=0,wB=0,best=0,thr=128;for(let t=0;t<256;t++){wB+=hist[t];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=t*hist[t];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;thr=t}}
+  const lab=new Uint8Array(n),stack=new Int32Array(n);let top=null;
+  for(let i=0;i<n;i++){
+    if(lab[i]||g[i]<=thr)continue;
+    let sp=0,cnt=0,a={tl:[1e9,0,0],br:[-1e9,0,0],tr:[-1e9,0,0],bl:[1e9,0,0]};stack[sp++]=i;lab[i]=1;
+    while(sp){const p=stack[--sp],px=p%w,py=(p/w)|0;cnt++;
+      const s1=px+py,s2=px-py;if(s1<a.tl[0])a.tl=[s1,px,py];if(s1>a.br[0])a.br=[s1,px,py];if(s2>a.tr[0])a.tr=[s2,px,py];if(s2<a.bl[0])a.bl=[s2,px,py];
+      if(px>0&&!lab[p-1]&&g[p-1]>thr){lab[p-1]=1;stack[sp++]=p-1}
+      if(px<w-1&&!lab[p+1]&&g[p+1]>thr){lab[p+1]=1;stack[sp++]=p+1}
+      if(py>0&&!lab[p-w]&&g[p-w]>thr){lab[p-w]=1;stack[sp++]=p-w}
+      if(py<h-1&&!lab[p+w]&&g[p+w]>thr){lab[p+w]=1;stack[sp++]=p+w}}
+    if(!top||cnt>top.cnt)top={cnt,a};
+  }
+  if(!top||top.cnt<n*.06||top.cnt>n*.97)return null;
+  const k=1/S,m=-1;// léger retrait vers l'intérieur pour exclure le bord du fond
+  return [[top.a.tl[1]-m,top.a.tl[2]-m],[top.a.tr[1]+m,top.a.tr[2]-m],[top.a.br[1]+m,top.a.br[2]+m],[top.a.bl[1]-m,top.a.bl[2]+m]]
+    .map(([px,py])=>[Math.min(src.width,Math.max(0,px*k)),Math.min(src.height,Math.max(0,py*k))]);
+}
+function fullQuad(c,inset=0){const iw=c.width*inset,ih=c.height*inset;return[[iw,ih],[c.width-iw,ih],[c.width-iw,c.height-ih],[iw,c.height-ih]]}
+// Homographie carré unité -> quadrilatère (Heckbert)
+function homography(q){
+  const [x0,y0]=q[0],[x1,y1]=q[1],[x2,y2]=q[2],[x3,y3]=q[3];
+  const dx1=x1-x2,dx2=x3-x2,dx3=x0-x1+x2-x3,dy1=y1-y2,dy2=y3-y2,dy3=y0-y1+y2-y3;
+  let a,b,c,d,e,f,g=0,h=0;
+  if(Math.abs(dx3)<1e-9&&Math.abs(dy3)<1e-9){a=x1-x0;b=x3-x0;c=x0;d=y1-y0;e=y3-y0;f=y0}
+  else{const det=dx1*dy2-dx2*dy1;g=(dx3*dy2-dx2*dy3)/det;h=(dx1*dy3-dx3*dy1)/det;a=x1-x0+g*x1;b=x3-x0+h*x3;c=x0;d=y1-y0+g*y1;e=y3-y0+h*y3;f=y0}
+  return {a,b,c,d,e,f,g,h};
+}
+function warp(src,q,mode){
+  const dist=(p,r)=>Math.hypot(p[0]-r[0],p[1]-r[1]);
+  const Wd=Math.max(dist(q[0],q[1]),dist(q[3],q[2])),Hd=Math.max(dist(q[0],q[3]),dist(q[1],q[2]));
+  const k=Math.min(1,1800/Math.max(Wd,Hd)),W=Math.max(1,Math.round(Wd*k)),H=Math.max(1,Math.round(Hd*k));
+  const sw=src.width,sh=src.height,sd=src.getContext('2d',{willReadFrequently:true}).getImageData(0,0,sw,sh).data;
+  const out=document.createElement('canvas');out.width=W;out.height=H;const ox=out.getContext('2d'),img=ox.createImageData(W,H),od=img.data;
+  const M=homography(q),gray=mode==='doc'?new Uint8ClampedArray(W*H):null;
+  for(let y=0;y<H;y++){const v=(y+.5)/H;for(let x=0;x<W;x++){
+    const u=(x+.5)/W,den=M.g*u+M.h*v+1;let fx=(M.a*u+M.b*v+M.c)/den-.5,fy=(M.d*u+M.e*v+M.f)/den-.5;
+    fx=Math.max(0,Math.min(sw-1.001,fx));fy=Math.max(0,Math.min(sh-1.001,fy));
+    const ix=fx|0,iy=fy|0,ax=fx-ix,ay=fy-iy,p=(iy*sw+ix)*4,q2=p+sw*4,o=(y*W+x)*4;
+    for(let ch=0;ch<3;ch++){const t=sd[p+ch]*(1-ax)+sd[p+4+ch]*ax,bt=sd[q2+ch]*(1-ax)+sd[q2+4+ch]*ax;od[o+ch]=t*(1-ay)+bt*ay}
+    od[o+3]=255;if(gray)gray[y*W+x]=(od[o]*77+od[o+1]*150+od[o+2]*29)>>8;
+  }}
+  if(gray){
+    // Effacement des ombres : chaque pixel est divisé par la luminosité moyenne de son voisinage
+    const r=Math.max(10,Math.round(Math.min(W,H)/10)),W1=W+1,I=new Float64Array(W1*(H+1));
+    for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=gray[y*W+x];I[(y+1)*W1+x+1]=I[y*W1+x+1]+row}}
+    for(let y=0;y<H;y++){const y0=Math.max(0,y-r),y1=Math.min(H,y+r+1);for(let x=0;x<W;x++){
+      const x0=Math.max(0,x-r),x1=Math.min(W,x+r+1),mean=(I[y1*W1+x1]-I[y0*W1+x1]-I[y1*W1+x0]+I[y0*W1+x0])/((x1-x0)*(y1-y0));
+      const ratio=gray[y*W+x]/Math.max(1,mean),val=255-(1-ratio)*255*2.2,o=(y*W+x)*4;
+      od[o]=od[o+1]=od[o+2]=val;
+    }}
+  }
+  ox.putImageData(img,0,0);return out;
+}
+function openScanner(){
+  $('scanner').hidden=false;$('homeDock').hidden=true;
+  document.querySelectorAll('[data-scanmode]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scanmode===scan.mode)));
+  const cv=$('scanCanvas');cv.width=scan.src.width;cv.height=scan.src.height;cv.getContext('2d').drawImage(scan.src,0,0);
+  requestAnimationFrame(layoutScanner);
+}
+function layoutScanner(){
+  if($('scanner').hidden)return;
+  const stage=$('scanStage'),cv=$('scanCanvas'),sw=stage.clientWidth,sh=stage.clientHeight;
+  const s=Math.min(sw/scan.src.width,sh/scan.src.height),w=scan.src.width*s,h=scan.src.height*s;
+  const ox=(sw-w)/2,oy=(sh-h)/2;
+  cv.style.width=w+'px';cv.style.height=h+'px';cv.style.left=ox+'px';cv.style.top=oy+'px';
+  scan.view={s,ox,oy};
+  const P=scan.pts.map(([x,y])=>[ox+x*s,oy+y*s]);
+  $('scanPoly').setAttribute('points',P.map(p=>p.join(',')).join(' '));
+  $('scanSvg').setAttribute('viewBox',`0 0 ${sw} ${sh}`);
+  document.querySelectorAll('.handle').forEach((el,i)=>{el.style.left=P[i][0]+'px';el.style.top=P[i][1]+'px'});
+}
+window.addEventListener('resize',layoutScanner);
+document.querySelectorAll('.handle').forEach((el,i)=>{
+  el.addEventListener('pointerdown',e=>{e.preventDefault();scan.drag=i;el.setPointerCapture(e.pointerId);el.classList.add('on')});
+  el.addEventListener('pointermove',e=>{
+    if(scan.drag!==i)return;const r=$('scanStage').getBoundingClientRect(),{s,ox,oy}=scan.view;
+    scan.pts[i]=[Math.max(0,Math.min(scan.src.width,(e.clientX-r.left-ox)/s)),Math.max(0,Math.min(scan.src.height,(e.clientY-r.top-oy)/s))];
+    layoutScanner();
+  });
+  const end=()=>{scan.drag=-1;el.classList.remove('on')};
+  el.addEventListener('pointerup',end);el.addEventListener('pointercancel',end);
+});
+document.querySelectorAll('[data-scanmode]').forEach(b=>b.onclick=()=>{scan.mode=b.dataset.scanmode;LS.set('recus.scanMode',scan.mode);document.querySelectorAll('[data-scanmode]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)))});
+$('scanAll').onclick=()=>{scan.pts=fullQuad(scan.src);layoutScanner()};
+$('scanCancel').onclick=()=>{$('scanner').hidden=true;if($('sheet').hidden){$('homeDock').hidden=false;scan.src=null}};
+$('scanOk').onclick=async()=>{
+  const btn=$('scanOk');btn.disabled=true;btn.textContent='Traitement…';
+  await new Promise(r=>setTimeout(r,30));
+  try{
+    const out=warp(scan.src,scan.pts,scan.mode);
+    const blob=await new Promise(res=>out.toBlob(res,'image/jpeg',scan.mode==='doc'?.7:.8));
+    $('scanner').hidden=true;
+    if(!draft)openEditor(null);
+    photoBlob=blob;if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=URL.createObjectURL(blob);draft.thumb=null;renderPhoto();
+    if(apiKey())analyse();
+    else{draft.aiNote='Pas de clé API : remplis les champs à partir de la photo, ou ajoute ta clé dans les réglages.';draft.aiNoteAction='settings';renderNotice()}
+  }catch(e){toast('Recadrage impossible : '+(e.message||e))}
+  finally{btn.disabled=false;btn.textContent='Valider'}
+};
 async function onPhoto(e){
   const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
-  openEditor(null);
-  try{photoBlob=await downscale(f,1600,.82)}catch(_){photoBlob=f}
-  photoUrl=URL.createObjectURL(photoBlob);renderPhoto();
-  if(apiKey())analyse();
-  else{draft.aiNote='Pas de clé API : remplis les champs à partir de la photo, ou ajoute ta clé dans les réglages.';draft.aiNoteAction='settings';renderNotice()}
+  if(draft)closeEditor();
+  try{scan.src=await loadWorking(f)}catch(_){toast('Photo illisible, réessaie.');return}
+  scan.pts=detectQuad(scan.src)||fullQuad(scan.src,.06);
+  openScanner();
 }
 $('camIn').onchange=onPhoto;$('galIn').onchange=onPhoto;
 

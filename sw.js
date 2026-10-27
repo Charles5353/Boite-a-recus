@@ -1,6 +1,6 @@
 // Boîte à reçus : fonctionnement hors ligne.
 // Change VERSION à chaque mise à jour de index.html pour que le téléphone récupère la nouvelle version.
-const VERSION = 'recus-v1';
+const VERSION = 'recus-v2';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
