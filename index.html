@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Boîte à reçus</title>
+<meta name="theme-color" content="#2340b8">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+/* Une colonne mobile : barre d'actions en bas, liste par mois, fiche de saisie plein écran façon ticket de caisse */
+:root{
+  --paper:#eef1f4; --card:#ffffff; --ink:#1a2030; --muted:#5b6476; --line:#d6dce5;
+  --stamp:#2340b8; --stamp-soft:#e3e8fb; --on-stamp:#ffffff;
+  --ok:#1d7a4b; --warn:#a46200; --bad:#b3261e; --warn-soft:#fff3df; --bad-soft:#fde8e6; --ok-soft:#e2f4ea;
+  --body:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:ui-monospace, "Roboto Mono", "SFMono-Regular", Menlo, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --paper:#11141a; --card:#1a1f28; --ink:#e7eaf0; --muted:#9aa3b3; --line:#2b323e;
+  --stamp:#8ea2ff; --stamp-soft:#232b48; --on-stamp:#0d1226;
+  --ok:#5cc792; --warn:#e3a54a; --bad:#f17d73; --warn-soft:#33270f; --bad-soft:#3a1d1b; --ok-soft:#173225;
+  color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+img{max-width:100%}
+.wrap{max-width:640px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left,0px));padding-right:max(16px, env(safe-area-inset-right,0px));padding-block:calc(20px + env(safe-area-inset-top,0px)) 150px;display:flex;flex-direction:column;gap:18px}
+h1,h2{margin:0;text-wrap:balance}
+h1{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.05}
+h2{font-size:20px;font-weight:700}
+.lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,label.btn:focus-within{outline:2px solid var(--stamp);outline-offset:2px}
+a{color:var(--stamp)}
+
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
+.iconbtn{background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:12px;width:44px;height:44px;display:grid;place-items:center;flex:none}
+.iconbtn svg{width:22px;height:22px}
+.banner{border-radius:12px;padding:12px 14px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+
+.summary{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.summary .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+select,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 10px;min-width:0;width:100%}
+.summary select{width:auto}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kpi .num{font-size:17px;font-weight:600;overflow-wrap:anywhere}
+.kpi.main .num{color:var(--stamp)}
+.ghost{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:14px}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+
+.list{display:flex;flex-direction:column;gap:8px}
+.day{font-size:12px;color:var(--muted);margin:8px 2px 0;font-weight:600}
+.item{display:grid;grid-template-columns:52px 1fr auto;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:left;color:var(--ink);width:100%}
+.thumb{width:52px;height:52px;border-radius:8px;background:var(--paper);object-fit:cover;display:grid;place-items:center;color:var(--muted);font-size:11px}
+.item .mid{min-width:0}
+.item .who{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .what{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .amt{text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
+.item .amt .num{font-weight:600}
+.chips{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.chip{font-family:var(--mono);font-size:10.5px;padding:1px 6px;border-radius:99px;background:var(--stamp-soft);color:var(--stamp)}
+
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:22px 18px;display:grid;grid-template-columns:96px 1fr;gap:16px;align-items:center}
+.empty p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.mini-ticket{background:var(--paper);padding:10px 8px 14px;font-family:var(--mono);font-size:9px;line-height:1.5;color:var(--muted);
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/8px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/8px 100%}
+.mini-ticket b{color:var(--ink)}
+
+.dock{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+  padding:12px max(16px, env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px));z-index:5}
+.dock .row{max-width:640px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:12px;padding:13px 16px;font-weight:600;border:1px solid transparent;font-size:15px;text-align:center}
+.btn.primary{background:var(--stamp);color:var(--on-stamp)}
+.btn.second{background:var(--card);color:var(--ink);border-color:var(--line)}
+.btn.danger{background:none;color:var(--bad);border-color:var(--bad)}
+.btn[disabled]{opacity:.55;cursor:default}
+.btn input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+label.btn{position:relative;cursor:pointer}
+.btn svg{width:20px;height:20px;flex:none}
+
+.sheet{position:fixed;inset:0;background:var(--paper);z-index:20;overflow-y:auto;overscroll-behavior:contain}
+.sheet .wrap{padding-block:calc(14px + env(safe-area-inset-top,0px)) 120px}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.photo{position:relative;border-radius:12px;overflow:hidden;background:var(--card);border:1px solid var(--line);max-height:260px;display:flex;justify-content:center}
+.photo img{max-height:260px;object-fit:contain;width:100%}
+.photo.none{padding:22px;color:var(--muted);font-size:14px}
+.reading{position:absolute;inset:0;background:color-mix(in srgb,var(--card) 72%,transparent);display:grid;place-items:center;text-align:center;font-weight:600}
+.scan{position:absolute;left:0;right:0;height:3px;background:var(--stamp);top:0;animation:scan 1.8s ease-in-out infinite alternate;opacity:.7}
+@keyframes scan{to{top:calc(100% - 3px)}}
+@media (prefers-reduced-motion:reduce){.scan{animation:none;top:50%}}
+.notices{display:flex;flex-direction:column;gap:8px}
+.notice{border-radius:10px;padding:10px 12px;font-size:14px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.warn{background:var(--warn-soft);color:var(--warn)}
+.bad{background:var(--bad-soft);color:var(--bad)}
+.ok{background:var(--ok-soft);color:var(--ok)}
+.notice .ghost,.banner .ghost{color:inherit;border-color:currentColor;padding:4px 10px}
+
+.ticket{background:var(--card);padding:18px 16px 28px;display:flex;flex-direction:column;gap:14px;
+  -webkit-mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/14px 100%;mask:conic-gradient(from -45deg at bottom,#0000,#000 1deg 89deg,#0000 90deg) 50%/14px 100%}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.panel p{margin:0;font-size:14px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media (max-width:380px){.two{grid-template-columns:1fr}}
+.hint{font-size:12px;min-height:16px}
+.hint.ok,.hint.bad{background:none}
+.hint.ok{color:var(--ok)} .hint.bad{color:var(--bad)} .hint.unk{color:var(--muted)}
+.rule{border:0;border-top:1px dashed var(--line);margin:2px 0;width:100%}
+.vat{display:grid;grid-template-columns:52px repeat(3,minmax(0,1fr));gap:6px;align-items:center}
+.vat .h{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600;text-align:right;padding-right:4px}
+.vat .h:first-child{text-align:left}
+.vat .rate{font-family:var(--mono);font-weight:600;font-size:14px}
+.vat input{font-family:var(--mono);text-align:right;padding:8px 6px;font-variant-numeric:tabular-nums}
+.vat .dim{opacity:.55}
+.totals{display:flex;flex-direction:column;gap:4px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.totals div{display:flex;justify-content:space-between;gap:10px}
+.totals .grand{font-size:20px;font-weight:600;border-top:1px solid var(--ink);padding-top:6px;margin-top:4px}
+.sheet .dock .row{display:flex}
+.sheet .dock .row .primary{flex:1}
+
+.viewer{position:fixed;inset:0;background:#000;z-index:30;display:flex;align-items:center;justify-content:center}
+.viewer img{max-width:100%;max-height:100%;object-fit:contain}
+.viewer button{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:calc(12px + env(safe-area-inset-right,0px));background:#fff;color:#000;border:0;border-radius:99px;padding:8px 14px;font-weight:600}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:99px;font-size:14px;z-index:40;max-width:calc(100% - 32px);text-align:center}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="home">
+  <header>
+    <div>
+      <div class="lbl">Comptabilité</div>
+      <h1>Mes reçus</h1>
+    </div>
+    <button class="iconbtn" id="setBtn" aria-label="Réglages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <div class="banner warn" id="keyBanner" hidden>
+    <span>Ajoute ta clé API Claude pour que les reçus soient lus automatiquement.</span>
+    <button class="ghost" id="keyBannerBtn">Réglages</button>
+  </div>
+  <div class="banner warn" id="backupBanner" hidden>
+    <span id="backupText"></span>
+    <button class="ghost" id="backupBannerBtn">Sauvegarder</button>
+  </div>
+
+  <section class="summary">
+    <div class="top">
+      <select id="month" aria-label="Mois affiché"></select>
+      <div class="actions">
+        <button class="ghost" id="shareBtn" hidden>Partager CSV</button>
+        <button class="ghost" id="csvBtn" hidden>Télécharger CSV</button>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi main"><span class="lbl">Total TTC</span><span class="num" id="kTTC">0,00 €</span></div>
+      <div class="kpi"><span class="lbl">Total HT</span><span class="num" id="kHT">0,00 €</span></div>
+      <div class="kpi"><span class="lbl">TVA</span><span class="num" id="kTVA">0,00 €</span></div>
+    </div>
+  </section>
+
+  <div class="list" id="list"></div>
+
+  <div class="empty" id="empty" hidden>
+    <div class="mini-ticket" aria-hidden="true">
+      <b>STATION LAVAL</b><br>FR40 123456789<br>GAZOLE 42,10 L<br>TVA 20%&nbsp;&nbsp;&nbsp;12,35<br><b>TTC&nbsp;&nbsp;&nbsp;&nbsp;74,10</b>
+    </div>
+    <div>
+      <h2>Aucun reçu ce mois-ci</h2>
+      <p>Prends ton ticket en photo : l'émetteur, le n° de TVA, les montants HT, TVA et TTC sont lus et rangés par taux.</p>
+    </div>
+  </div>
+</div>
+
+<nav class="dock" id="homeDock">
+  <div class="row">
+    <label class="btn primary" for="camIn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      Photographier un reçu
+      <input type="file" id="camIn" accept="image/*" capture="environment">
+    </label>
+    <label class="btn second" for="galIn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m3 16 5-5 5 5 3-3 5 5"/></svg>
+      Galerie
+      <input type="file" id="galIn" accept="image/*">
+    </label>
+  </div>
+</nav>
+
+<!-- Fiche reçu -->
+<div class="sheet" id="sheet" hidden>
+  <div class="wrap">
+    <div class="sheet-head">
+      <h2 id="sheetTitle">Nouveau reçu</h2>
+      <button class="ghost" id="closeBtn">Fermer</button>
+    </div>
+    <div class="photo" id="photoBox"></div>
+    <div class="notices" id="notice"></div>
+    <form class="ticket" id="form" autocomplete="off" novalidate>
+      <div class="field">
+        <label class="lbl" for="fEmetteur">Émetteur</label>
+        <input id="fEmetteur" placeholder="Ex. Total Energies Laval">
+      </div>
+      <div class="field">
+        <label class="lbl" for="fTva">N° TVA intracommunautaire</label>
+        <input id="fTva" class="num" placeholder="FR + 11 caractères" autocapitalize="characters">
+        <span class="hint" id="tvaHint"></span>
+      </div>
+      <div class="two">
+        <div class="field">
+          <label class="lbl" for="fDate">Date</label>
+          <input id="fDate" type="date">
+        </div>
+        <div class="field">
+          <label class="lbl" for="fCat">Catégorie</label>
+          <select id="fCat"></select>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="fObjet">Objet</label>
+        <input id="fObjet" placeholder="Ex. Gazole 42 L">
+      </div>
+      <hr class="rule">
+      <div class="vat" id="vat">
+        <span class="h">Taux</span><span class="h">HT</span><span class="h">TVA</span><span class="h">TTC</span>
+      </div>
+      <hr class="rule">
+      <div class="totals">
+        <div><span>TOTAL HT</span><span id="tHT">0,00</span></div>
+        <div><span>TOTAL TVA</span><span id="tTVA">0,00</span></div>
+        <div class="grand"><span>TOTAL TTC</span><span id="tTTC">0,00</span></div>
+      </div>
+    </form>
+  </div>
+  <nav class="dock">
+    <div class="row">
+      <button class="btn danger" id="delBtn" type="button" hidden>Supprimer</button>
+      <button class="btn primary" id="saveBtn" type="button">Enregistrer</button>
+    </div>
+  </nav>
+</div>
+
+<!-- Réglages -->
+<div class="sheet" id="settings" hidden>
+  <div class="wrap">
+    <div class="sheet-head">
+      <h2>Réglages</h2>
+      <button class="ghost" id="setClose">Fermer</button>
+    </div>
+    <section class="panel">
+      <h2>Lecture automatique</h2>
+      <p>Les photos sont envoyées à l'API Claude d'Anthropic avec ta clé. Elle reste enregistrée dans ce téléphone uniquement. Crée-la sur <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> (paiement à l'usage).</p>
+      <div class="field">
+        <label class="lbl" for="sKey">Clé API</label>
+        <input id="sKey" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label class="lbl" for="sModel">Modèle</label>
+        <select id="sModel">
+          <option value="claude-sonnet-5-5">Sonnet 5.5 · le plus fiable</option>
+          <option value="claude-haiku-5-5">Haiku 5.5 · le moins cher</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="sSave" type="button">Enregistrer la clé</button>
+        <button class="btn second" id="sTest" type="button">Tester</button>
+      </div>
+      <span class="hint" id="sHint"></span>
+    </section>
+    <section class="panel">
+      <h2>Sauvegarde</h2>
+      <p>Tes reçus et leurs photos sont stockés dans ce téléphone. Fais une sauvegarde chaque mois (Google Drive, mail…) : en cas de perte du téléphone ou de suppression des données de Chrome, c'est elle qui te permettra de tout récupérer.</p>
+      <div class="actions">
+        <button class="btn primary" id="bExport" type="button">Créer une sauvegarde</button>
+        <label class="btn second" for="bImport">Restaurer<input type="file" id="bImport" accept=".json,application/json"></label>
+      </div>
+      <span class="hint" id="bHint"></span>
+    </section>
+  </div>
+</div>
+
+<div class="viewer" id="viewer" hidden>
+  <img id="viewerImg" alt="Photo du reçu">
+  <button id="viewerClose">Fermer</button>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const RATES=[{k:'t0',v:0,l:'0 %'},{k:'t55',v:5.5,l:'5,5 %'},{k:'t10',v:10,l:'10 %'},{k:'t20',v:20,l:'20 %'}];
+const CATS=['Carburant','Péage / parking','Entretien véhicule','Lavage','Repas','Fournitures','Téléphone / internet','Assurance','Autre'];
+const $=id=>document.getElementById(id);
+let recus=[], draft=null, photoBlob=null, photoUrl=null, reading=null, delArmed=false, saving=false;
+const thumbUrls=new Map();
+
+/* ---------- Réglages locaux ---------- */
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:v}catch(_){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(_){}}};
+const apiKey=()=>LS.get('recus.key','');
+const apiModel=()=>LS.get('recus.model','claude-sonnet-5-5');
+
+/* ---------- Base locale (IndexedDB) ---------- */
+const store={
+  db:null,
+  open(){return new Promise((res,rej)=>{const r=indexedDB.open('boite-a-recus',1);r.onupgradeneeded=()=>r.result.createObjectStore('recus',{keyPath:'id'});r.onsuccess=()=>{this.db=r.result;res()};r.onerror=()=>rej(r.error)})},
+  req(mode,fn){return new Promise((res,rej)=>{const tx=this.db.transaction('recus',mode);const q=fn(tx.objectStore('recus'));tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>rej(tx.error)})},
+  all(){return this.req('readonly',s=>s.getAll())},
+  put(o){return this.req('readwrite',s=>s.put(o))},
+  del(id){return this.req('readwrite',s=>s.delete(id))}
+};
+async function reload(){recus=await store.all();renderList()}
+
+/* ---------- Outils ---------- */
+const r2=n=>Math.round((n+Number.EPSILON)*100)/100;
+const fr=n=>(n==null||isNaN(n))?'':n.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const eur=n=>((n==null||isNaN(n))?0:n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' €';
+const parseNum=s=>{if(s==null)return null;if(typeof s==='number')return isNaN(s)?null:s;s=String(s).replace(/[\s €]/g,'').replace(',','.');if(s==='')return null;const n=parseFloat(s);return isNaN(n)?null:n};
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2800)}
+function saveFile(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
+const blobToB64=b=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(b)});
+const b64ToBlob=(b64,type)=>{const bin=atob(b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new Blob([u],{type})};
+
+/* ---------- Calculs TVA ---------- */
+function blankLines(){const o={};RATES.forEach(r=>o[r.k]={ht:null,tva:null,ttc:null});return o}
+function complete(row,rate){
+  let {ht,tva,ttc}=row;
+  if(rate===0){if(ttc==null&&ht!=null)ttc=ht;if(ht==null&&ttc!=null)ht=ttc;if(ht!=null)tva=0;return {ht,tva,ttc}}
+  const k=rate/100;
+  if(ttc!=null&&ht==null&&tva==null){ht=r2(ttc/(1+k));tva=r2(ttc-ht)}
+  else if(ht!=null&&tva==null&&ttc==null){tva=r2(ht*k);ttc=r2(ht+tva)}
+  else if(tva!=null&&ht==null&&ttc==null){ht=r2(tva/k);ttc=r2(ht+tva)}
+  else if(ttc!=null&&tva!=null&&ht==null){ht=r2(ttc-tva)}
+  else if(ttc!=null&&ht!=null&&tva==null){tva=r2(ttc-ht)}
+  else if(ht!=null&&tva!=null&&ttc==null){ttc=r2(ht+tva)}
+  return {ht,tva,ttc};
+}
+function totals(lines){let ht=0,tva=0,ttc=0;RATES.forEach(r=>{const l=lines[r.k]||{};ht+=l.ht||0;tva+=l.tva||0;ttc+=l.ttc||0});return {ht:r2(ht),tva:r2(tva),ttc:r2(ttc)}}
+function nearestRate(x){if(x==null||isNaN(x))return null;let best=null,d=1e9;RATES.forEach(r=>{const dd=Math.abs(r.v-x);if(dd<d){d=dd;best=r}});return d<=1.2?best:null}
+/* N° TVA FR : clé = (12 + 3 × (SIREN mod 97)) mod 97 */
+function checkTVA(s){
+  if(!s) return null;
+  s=s.toUpperCase().replace(/[\s.\-]/g,'');
+  if(/^FR[0-9A-Z]{2}\d{9}$/.test(s)){const key=s.slice(2,4),siren=Number(s.slice(4));if(/^\d\d$/.test(key))return((12+3*(siren%97))%97)===Number(key)?'ok':'bad';return 'unk'}
+  if(/^(AT|BE|BG|CY|CZ|DE|DK|EE|EL|ES|FI|HR|HU|IE|IT|LT|LU|LV|MT|NL|PL|PT|RO|SE|SI|SK|XI)[0-9A-Z+*]{8,12}$/.test(s)) return 'unk';
+  return 'bad';
+}
+function tvaHint(){
+  const v=$('fTva').value.trim(),h=$('tvaHint'),c=checkTVA(v);
+  h.className='hint'+(c?' '+c:'');
+  h.textContent=c==='ok'?'Clé de contrôle valide (SIREN '+v.toUpperCase().replace(/[\s.\-]/g,'').slice(4)+')':c==='bad'?'Format ou clé incorrecte, vérifie sur le ticket':c==='unk'?'Numéro étranger : format plausible, clé non vérifiée':'';
+}
+
+/* ---------- Liste ---------- */
+const monthKey=d=>(d||'').slice(0,7);
+function monthLabel(k){const [y,m]=k.split('-');const s=new Date(+y,+m-1,1).toLocaleDateString('fr-FR',{month:'long',year:'numeric'});return s.charAt(0).toUpperCase()+s.slice(1)}
+function filtered(){const m=$('month').value;return recus.filter(r=>m==='all'||monthKey(r.date)===m)}
+function renderList(){
+  const sel=$('month'),prev=sel.value;
+  const months=[...new Set(recus.map(r=>monthKey(r.date)).filter(Boolean))].sort().reverse();
+  const cur=monthKey(today());if(!months.includes(cur))months.unshift(cur);
+  sel.innerHTML=months.map(m=>`<option value="${m}">${monthLabel(m)}</option>`).join('')+'<option value="all">Tous les mois</option>';
+  sel.value=(prev&&[...months,'all'].includes(prev))?prev:cur;
+  const rows=filtered().sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.createdAt||0)-(a.createdAt||0));
+  const t={ht:0,tva:0,ttc:0};rows.forEach(r=>{t.ht+=r.totalHT||0;t.tva+=r.totalTVA||0;t.ttc+=r.totalTTC||0});
+  $('kTTC').textContent=eur(t.ttc);$('kHT').textContent=eur(t.ht);$('kTVA').textContent=eur(t.tva);
+  $('csvBtn').hidden=!rows.length;
+  $('shareBtn').hidden=!rows.length||!canShareFiles();
+  $('empty').hidden=rows.length>0;
+  thumbUrls.forEach(u=>URL.revokeObjectURL(u));thumbUrls.clear();
+  let html='',lastDay=null;
+  rows.forEach(r=>{
+    if(r.date!==lastDay){lastDay=r.date;html+=`<div class="day">${r.date?new Date(r.date+'T12:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'Sans date'}</div>`}
+    const chips=RATES.filter(x=>r.lignes&&r.lignes[x.k]&&r.lignes[x.k].ttc).map(x=>`<span class="chip">${x.l}</span>`).join('');
+    let src='';if(r.thumb){src=URL.createObjectURL(r.thumb);thumbUrls.set(r.id,src)}
+    html+=`<button class="item" data-id="${esc(r.id)}">${src?`<img class="thumb" src="${src}" alt="">`:'<span class="thumb">—</span>'}<span class="mid"><div class="who">${esc(r.emetteur||'Émetteur inconnu')}</div><div class="what">${esc([r.categorie,r.objet].filter(Boolean).join(' · ')||'—')}</div></span><span class="amt"><span class="num">${eur(r.totalTTC)}</span><span class="chips">${chips}</span></span></button>`;
+  });
+  $('list').innerHTML=html;
+  renderBanners();
+}
+function renderBanners(){
+  $('keyBanner').hidden=!!apiKey();
+  const last=+LS.get('recus.lastBackup','0'), since=recus.filter(r=>(r.updatedAt||0)>last).length;
+  const old=Date.now()-last>30*864e5;
+  $('backupBanner').hidden=!(since>0&&old);
+  $('backupText').textContent=last?`${since} reçu${since>1?'s':''} pas encore sauvegardé${since>1?'s':''} depuis plus d'un mois.`:`${since} reçu${since>1?'s':''} jamais sauvegardé${since>1?'s':''}. Pense à faire une sauvegarde.`;
+}
+$('month').onchange=renderList;
+$('list').onclick=e=>{const b=e.target.closest('.item');if(!b)return;const r=recus.find(x=>x.id===b.dataset.id);if(r)openEditor(r)};
+
+/* ---------- Fiche reçu ---------- */
+$('fCat').innerHTML='<option value="">—</option>'+CATS.map(c=>`<option>${c}</option>`).join('');
+(function buildVat(){
+  const v=$('vat');
+  RATES.forEach(r=>v.insertAdjacentHTML('beforeend',`<span class="rate" id="lab_${r.k}">${r.l}</span>`+['ht','tva','ttc'].map(f=>`<input id="v_${r.k}_${f}" data-k="${r.k}" data-f="${f}" inputmode="decimal" aria-label="${f.toUpperCase()} ${r.l}" placeholder="—">`).join('')));
+  v.addEventListener('input',e=>{
+    const i=e.target;if(!i.dataset.k)return;
+    const r=RATES.find(x=>x.k===i.dataset.k),f=i.dataset.f,val=parseNum(i.value);
+    if(val==null&&f!=='tva'){draft.lignes[r.k]={ht:null,tva:null,ttc:null}}
+    else{const row={ht:null,tva:null,ttc:null};row[f]=val;if(f==='tva')row.ht=draft.lignes[r.k].ht;draft.lignes[r.k]=complete(row,r.v)}
+    paintVat(i.id);paintTotals();
+  });
+})();
+function paintVat(skipId){
+  RATES.forEach(r=>{
+    const l=draft.lignes[r.k];let any=false;
+    ['ht','tva','ttc'].forEach(f=>{const el=$(`v_${r.k}_${f}`);if(l[f]!=null)any=true;if(el.id!==skipId)el.value=l[f]==null?'':fr(l[f])});
+    ['ht','tva','ttc'].forEach(f=>$(`v_${r.k}_${f}`).classList.toggle('dim',!any));
+    $('lab_'+r.k).classList.toggle('dim',!any);
+  });
+}
+function paintTotals(){
+  const t=totals(draft.lignes);
+  $('tHT').textContent=fr(t.ht)||'0,00';$('tTVA').textContent=fr(t.tva)||'0,00';$('tTTC').textContent=fr(t.ttc)||'0,00';
+  renderNotice();
+}
+function renderNotice(){
+  let html='';
+  if(draft.error)html+=`<div class="notice bad"><span>${esc(draft.error)}</span>${photoBlob&&apiKey()?'<button class="ghost" type="button" data-act="reread">Relire</button>':''}</div>`;
+  if(draft.aiNote)html+=`<div class="notice warn"><span>${esc(draft.aiNote)}</span>${draft.aiNoteAction?`<button class="ghost" type="button" data-act="${draft.aiNoteAction}">Réglages</button>`:''}</div>`;
+  const t=totals(draft.lignes);
+  if(draft.ticketTTC!=null&&t.ttc>0&&Math.abs(t.ttc-draft.ticketTTC)>0.02)html+=`<div class="notice warn"><span>Le ticket affiche ${eur(draft.ticketTTC)} TTC, la ventilation donne ${eur(t.ttc)}. Vérifie les lignes.</span></div>`;
+  else if(draft.ticketTTC!=null&&t.ttc>0&&!draft.error)html+=`<div class="notice ok"><span>Ventilation cohérente avec le total du ticket.</span></div>`;
+  $('notice').innerHTML=html;
+}
+$('notice').onclick=e=>{const a=e.target.dataset.act;if(a==='reread')analyse();if(a==='settings')openSettings()};
+
+function renderPhoto(){
+  const b=$('photoBox');
+  b.className='photo'+(photoUrl?'':' none');
+  b.innerHTML=photoUrl?`<img src="${photoUrl}" alt="Photo du reçu" id="photoImg">`+(reading?'<div class="reading"><div class="scan"></div><div>Lecture du reçu…<br><br><button class="ghost" type="button" id="cancelRead">Annuler</button></div></div>':''):'Pas de photo pour ce reçu.';
+  const img=$('photoImg');if(img)img.onclick=()=>{$('viewerImg').src=photoUrl;$('viewer').hidden=false};
+  const c=$('cancelRead');if(c)c.onclick=()=>reading&&reading.abort();
+}
+$('viewerClose').onclick=()=>{$('viewer').hidden=true};
+
+function openEditor(r){
+  draft=r?{...r,lignes:JSON.parse(JSON.stringify(r.lignes||{}))}:{emetteur:'',tvaIntra:'',date:today(),objet:'',categorie:'',lignes:blankLines()};
+  RATES.forEach(x=>{draft.lignes[x.k]=Object.assign({ht:null,tva:null,ttc:null},draft.lignes[x.k]||{})});
+  draft.error=null;draft.aiNote=null;draft.aiNoteAction=null;
+  photoBlob=r&&r.photo||null;
+  if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=photoBlob?URL.createObjectURL(photoBlob):null;
+  delArmed=false;
+  $('sheetTitle').textContent=r?'Modifier le reçu':'Nouveau reçu';
+  $('delBtn').hidden=!r;$('delBtn').textContent='Supprimer';
+  fillForm();renderPhoto();paintVat();paintTotals();
+  $('sheet').hidden=false;$('homeDock').hidden=true;$('sheet').scrollTop=0;
+}
+function fillForm(){
+  $('fEmetteur').value=draft.emetteur||'';$('fTva').value=draft.tvaIntra||'';$('fDate').value=draft.date||'';
+  $('fObjet').value=draft.objet||'';$('fCat').value=CATS.includes(draft.categorie)?draft.categorie:(draft.categorie?'Autre':'');tvaHint();
+}
+function closeEditor(){
+  if(reading)reading.abort();
+  $('sheet').hidden=true;$('homeDock').hidden=false;draft=null;photoBlob=null;
+  if(photoUrl){URL.revokeObjectURL(photoUrl);photoUrl=null}
+}
+$('closeBtn').onclick=closeEditor;
+[['fEmetteur','emetteur'],['fTva','tvaIntra'],['fDate','date'],['fObjet','objet'],['fCat','categorie']].forEach(([id,k])=>$(id).addEventListener('input',()=>{draft[k]=$(id).value;if(id==='fTva')tvaHint()}));
+
+/* ---------- Photo ---------- */
+async function downscale(file,max,q){
+  let src;
+  try{src=await createImageBitmap(file,{imageOrientation:'from-image'})}
+  catch(_){src=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file)})}
+  const s=Math.min(1,max/Math.max(src.width,src.height));
+  const c=document.createElement('canvas');c.width=Math.round(src.width*s);c.height=Math.round(src.height*s);
+  c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+  return await new Promise(res=>c.toBlob(res,'image/jpeg',q));
+}
+async function onPhoto(e){
+  const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  openEditor(null);
+  try{photoBlob=await downscale(f,1600,.82)}catch(_){photoBlob=f}
+  photoUrl=URL.createObjectURL(photoBlob);renderPhoto();
+  if(apiKey())analyse();
+  else{draft.aiNote='Pas de clé API : remplis les champs à partir de la photo, ou ajoute ta clé dans les réglages.';draft.aiNoteAction='settings';renderNotice()}
+}
+$('camIn').onchange=onPhoto;$('galIn').onchange=onPhoto;
+
+/* ---------- Lecture par l'API Claude ---------- */
+const PROMPT=`Tu lis la photo d'un ticket de caisse, reçu ou facture français, pour la comptabilité d'un chauffeur de taxi.
+Réponds UNIQUEMENT avec un objet JSON, sans texte autour, de cette forme :
+{
+ "lisible": true|false,
+ "emetteur": "nom commercial de l'enseigne ou de la société émettrice" | null,
+ "tva_intra": "numéro de TVA intracommunautaire sans espaces, ex FR40123456789" | null,
+ "date": "AAAA-MM-JJ" | null,
+ "objet": "description courte de l'achat, 2 à 6 mots, ex 'Gazole 42,10 L' ou 'Repas 2 couverts'" | null,
+ "categorie": "Carburant" | "Péage / parking" | "Entretien véhicule" | "Lavage" | "Repas" | "Fournitures" | "Téléphone / internet" | "Assurance" | "Autre",
+ "ventilation": [ { "taux": 0 | 5.5 | 10 | 20, "ht": nombre | null, "tva": nombre | null, "ttc": nombre | null } ],
+ "total_ttc": nombre | null,
+ "total_ht": nombre | null,
+ "total_tva": nombre | null,
+ "remarque": "problème de lecture éventuel, en une phrase" | null
+}
+Règles :
+- Les nombres utilisent le point décimal (12.35), sans symbole €.
+- N'invente jamais un numéro de TVA : null s'il n'est pas imprimé. Ne confonds pas avec le SIRET (14 chiffres) ou le SIREN (9 chiffres) ; le n° TVA français commence par FR.
+- Une ligne de "ventilation" par taux de TVA présent sur le ticket (tableau récapitulatif TVA en bas du ticket). Recopie les montants imprimés ; laisse null ce qui n'est pas imprimé.
+- Si le ticket n'indique aucun détail de TVA mais un seul type d'achat évident (ex. carburant à 20 %), mets une ligne avec le taux probable, le ttc, et ht/tva à null.
+- Taux usuels en France : 20 % (carburant, péage, entretien, matériel), 10 % (restauration sur place, boissons non alcoolisées), 5,5 % (alimentation de base), 0 % (exonéré, timbres, frais non soumis).
+- Si l'image n'est pas un reçu ou est illisible, "lisible": false et explique dans "remarque".`;
+
+async function callClaude(content,signal,maxTokens=1200){
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',signal,
+    headers:{'content-type':'application/json','x-api-key':apiKey(),'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({model:apiModel(),max_tokens:maxTokens,messages:[{role:'user',content}]})
+  });
+  let body=null;try{body=await res.json()}catch(_){}
+  if(!res.ok){const e=new Error((body&&body.error&&body.error.message)||('HTTP '+res.status));e.status=res.status;throw e}
+  return (body.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+}
+function errCopy(e){
+  if(e.name==='AbortError')return null;
+  if(!navigator.onLine)return 'Pas de réseau. Enregistre le reçu à la main ou appuie sur Relire une fois connecté.';
+  if(e.status===401)return 'Clé API refusée. Vérifie-la dans les réglages.';
+  if(e.status===400&&/credit|billing/i.test(e.message))return 'Crédit API épuisé. Recharge ton compte sur console.anthropic.com.';
+  if(e.status===404)return 'Modèle introuvable. Choisis un autre modèle dans les réglages.';
+  if(e.status===429||e.status===529)return 'Service surchargé. Appuie sur Relire dans une minute.';
+  if(e.bad)return 'La réponse était incomplète. Appuie sur Relire.';
+  return 'La lecture a échoué ('+e.message+'). Appuie sur Relire ou remplis les champs à la main.';
+}
+async function analyse(){
+  if(!photoBlob||!apiKey())return;
+  if(reading)reading.abort();
+  const ac=new AbortController();reading=ac;draft.error=null;draft.aiNote=null;draft.aiNoteAction=null;renderPhoto();renderNotice();
+  const mine=draft;
+  try{
+    const data=await blobToB64(photoBlob);
+    const text=await callClaude([{type:'image',source:{type:'base64',media_type:'image/jpeg',data}},{type:'text',text:PROMPT}],ac.signal);
+    const m=text.match(/\{[\s\S]*\}/);let obj=null;try{obj=m&&JSON.parse(m[0])}catch(_){}
+    if(!obj){const e=new Error('json');e.bad=true;throw e}
+    if(draft===mine)applyAI(obj);
+  }catch(e){
+    if(draft===mine){const msg=errCopy(e);if(msg)draft.error=msg}
+  }finally{
+    if(reading===ac)reading=null;
+    if(draft===mine){renderPhoto();renderNotice()}
+  }
+}
+function applyAI(a){
+  if(a.lisible===false){draft.error=a.remarque||'Le reçu est illisible. Reprends la photo plus près, bien à plat.';return}
+  if(a.emetteur)draft.emetteur=String(a.emetteur);
+  if(a.tva_intra)draft.tvaIntra=String(a.tva_intra).toUpperCase().replace(/[\s.\-]/g,'');
+  if(a.date&&/^\d{4}-\d{2}-\d{2}$/.test(a.date))draft.date=a.date;
+  if(a.objet)draft.objet=String(a.objet);
+  if(a.categorie)draft.categorie=CATS.includes(a.categorie)?a.categorie:'Autre';
+  draft.lignes=blankLines();
+  let unplaced=false;
+  (Array.isArray(a.ventilation)?a.ventilation:[]).forEach(v=>{
+    let r=nearestRate(parseNum(v.taux));
+    const ht=parseNum(v.ht),tva=parseNum(v.tva),ttc=parseNum(v.ttc);
+    if(!r&&ht&&tva!=null)r=nearestRate(tva/ht*100);
+    if(!r){unplaced=true;return}
+    const cur=draft.lignes[r.k],c=complete({ht,tva,ttc},r.v);
+    draft.lignes[r.k]={ht:r2((cur.ht||0)+(c.ht||0)),tva:r2((cur.tva||0)+(c.tva||0)),ttc:r2((cur.ttc||0)+(c.ttc||0))};
+  });
+  const tt=parseNum(a.total_ttc),th=parseNum(a.total_ht),tv=parseNum(a.total_tva);
+  draft.ticketTTC=tt;
+  if(totals(draft.lignes).ttc===0&&tt){const r=(th&&tv!=null)?nearestRate(tv/th*100):null;if(r)draft.lignes[r.k]=complete({ht:th,tva:tv,ttc:tt},r.v);else unplaced=true}
+  const notes=[];
+  if(unplaced)notes.push('Taux de TVA introuvable sur le ticket : saisis le TTC sur la bonne ligne de taux.');
+  if(a.remarque)notes.push(a.remarque);
+  draft.aiNote=notes.join(' ')||null;
+  fillForm();paintVat();paintTotals();
+}
+
+/* ---------- Enregistrer / supprimer ---------- */
+$('saveBtn').onclick=async()=>{
+  if(saving||!draft)return;
+  const t=totals(draft.lignes);
+  if(!String(draft.emetteur||'').trim()&&t.ttc===0){toast('Ajoute au moins un émetteur ou un montant.');return}
+  saving=true;$('saveBtn').disabled=true;
+  try{
+    let thumb=draft.thumb||null;
+    if(photoBlob&&!thumb){try{thumb=await downscale(photoBlob,160,.7)}catch(_){}}
+    const lignes={};RATES.forEach(r=>{const l=draft.lignes[r.k];lignes[r.k]={ht:l.ht??null,tva:l.tva??null,ttc:l.ttc??null}});
+    await store.put({
+      id:draft.id||(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2)),
+      emetteur:String(draft.emetteur||'').trim(),tvaIntra:String(draft.tvaIntra||'').toUpperCase().replace(/[\s.\-]/g,''),
+      date:draft.date||today(),objet:String(draft.objet||'').trim(),categorie:draft.categorie||'',
+      lignes,totalHT:t.ht,totalTVA:t.tva,totalTTC:t.ttc,ticketTTC:draft.ticketTTC??null,
+      photo:photoBlob||null,thumb,createdAt:draft.createdAt||Date.now(),updatedAt:Date.now()
+    });
+    closeEditor();await reload();toast('Reçu enregistré');
+  }catch(e){toast('Échec de l\'enregistrement : '+(e&&e.message||'réessaie'))}
+  finally{saving=false;$('saveBtn').disabled=false}
+};
+$('delBtn').onclick=async()=>{
+  if(!draft||!draft.id)return;
+  if(!delArmed){delArmed=true;$('delBtn').textContent='Confirmer la suppression';setTimeout(()=>{if(delArmed&&draft){delArmed=false;$('delBtn').textContent='Supprimer'}},4000);return}
+  try{await store.del(draft.id);closeEditor();await reload();toast('Reçu supprimé')}catch(_){toast('Suppression impossible, réessaie.')}
+};
+
+/* ---------- Export CSV (Excel FR) ---------- */
+function buildCSV(){
+  const rows=filtered().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const n=v=>v==null?'':String(r2(v)).replace('.',',');
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const head=['Date','Émetteur','N° TVA intracom','Objet','Catégorie','HT 0%','HT 5,5%','TVA 5,5%','HT 10%','TVA 10%','HT 20%','TVA 20%','Total HT','Total TVA','Total TTC'];
+  const lines=rows.map(r=>{const L=r.lignes||{},g=k=>L[k]||{};return[q(r.date),q(r.emetteur),q(r.tvaIntra),q(r.objet),q(r.categorie),n(g('t0').ht),n(g('t55').ht),n(g('t55').tva),n(g('t10').ht),n(g('t10').tva),n(g('t20').ht),n(g('t20').tva),n(r.totalHT),n(r.totalTVA),n(r.totalTTC)].join(';')});
+  const m=$('month').value;
+  return {blob:new Blob(['﻿'+head.map(q).join(';')+'\r\n'+lines.join('\r\n')+'\r\n'],{type:'text/csv'}),name:`recus-${m==='all'?'tous':m}.csv`};
+}
+function canShareFiles(){try{return !!(navigator.canShare&&navigator.canShare({files:[new File(['x'],'t.csv',{type:'text/csv'})]}))}catch(_){return false}}
+$('csvBtn').onclick=()=>{const c=buildCSV();saveFile(c.blob,c.name);toast('CSV téléchargé')};
+$('shareBtn').onclick=async()=>{
+  const c=buildCSV();
+  try{await navigator.share({files:[new File([c.blob],c.name,{type:'text/csv'})],title:'Reçus '+monthLabel($('month').value==='all'?monthKey(today()):$('month').value)})}
+  catch(e){if(e.name!=='AbortError')toast('Partage impossible, utilise Télécharger.')}
+};
+
+/* ---------- Réglages ---------- */
+function openSettings(){
+  $('sKey').value=apiKey();$('sModel').value=apiModel();$('sHint').textContent='';$('sHint').className='hint';
+  $('bHint').textContent=+LS.get('recus.lastBackup','0')?'Dernière sauvegarde : '+new Date(+LS.get('recus.lastBackup','0')).toLocaleDateString('fr-FR'):'Aucune sauvegarde pour l\'instant.';
+  $('bHint').className='hint unk';
+  $('settings').hidden=false;$('homeDock').hidden=true;
+}
+function closeSettings(){$('settings').hidden=true;if($('sheet').hidden)$('homeDock').hidden=false;renderBanners()}
+$('setBtn').onclick=openSettings;$('keyBannerBtn').onclick=openSettings;$('backupBannerBtn').onclick=openSettings;$('setClose').onclick=closeSettings;
+$('sSave').onclick=()=>{LS.set('recus.key',$('sKey').value.trim());LS.set('recus.model',$('sModel').value);$('sHint').className='hint ok';$('sHint').textContent='Clé enregistrée dans ce téléphone.';renderBanners();if(draft)renderNotice()};
+$('sTest').onclick=async()=>{
+  LS.set('recus.key',$('sKey').value.trim());LS.set('recus.model',$('sModel').value);
+  const h=$('sHint');h.className='hint unk';h.textContent='Test en cours…';
+  try{await callClaude([{type:'text',text:'Réponds juste OK.'}],undefined,10);h.className='hint ok';h.textContent='Connexion réussie, la lecture automatique est prête.'}
+  catch(e){h.className='hint bad';h.textContent=errCopy(e)||'Test annulé.'}
+  renderBanners();
+};
+$('bExport').onclick=async()=>{
+  const h=$('bHint');h.className='hint unk';h.textContent='Préparation…';
+  try{
+    const all=await store.all();
+    const out=[];for(const r of all){const o={...r};delete o.thumb;o.photo=r.photo?await blobToB64(r.photo):null;out.push(o)}
+    const d=new Date(),stamp=d.toISOString().slice(0,10);
+    saveFile(new Blob([JSON.stringify({app:'boite-a-recus',version:1,date:d.toISOString(),recus:out})],{type:'application/json'}),`sauvegarde-recus-${stamp}.json`);
+    LS.set('recus.lastBackup',String(Date.now()));
+    h.className='hint ok';h.textContent=`Sauvegarde de ${all.length} reçu${all.length>1?'s':''} créée. Range-la sur Google Drive ou envoie-la par mail.`;renderBanners();
+  }catch(e){h.className='hint bad';h.textContent='Sauvegarde impossible : '+(e.message||e)}
+};
+$('bImport').onchange=async e=>{
+  const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  const h=$('bHint');h.className='hint unk';h.textContent='Restauration…';
+  try{
+    const data=JSON.parse(await f.text());
+    if(data.app!=='boite-a-recus'||!Array.isArray(data.recus))throw new Error('ce fichier n\'est pas une sauvegarde de Boîte à reçus');
+    let n=0;
+    for(const r of data.recus){
+      const o={...r};o.photo=r.photo?b64ToBlob(r.photo,'image/jpeg'):null;o.thumb=null;
+      if(o.photo){try{o.thumb=await downscale(o.photo,160,.7)}catch(_){}}
+      await store.put(o);n++;
+    }
+    await reload();h.className='hint ok';h.textContent=`${n} reçu${n>1?'s':''} restauré${n>1?'s':''}.`;
+  }catch(err){h.className='hint bad';h.textContent='Restauration impossible : '+err.message}
+};
+
+/* ---------- Démarrage ---------- */
+(async()=>{
+  try{await store.open();await reload()}
+  catch(e){toast('Stockage du téléphone indisponible : '+(e&&e.message||''))}
+  if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+})();
+</script>
+</body>
+</html>
